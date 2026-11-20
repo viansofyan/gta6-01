@@ -1,171 +1,189 @@
-// Solmar City entry point: game loop, screens, save/load, staged shots,
-// debug handles for tests (window.__solmar, window.__errors, __shotReady).
-import { createWorld, stepWorld, tryEnterCar, currentMission, setMission } from './world.js';
-import { drawWorld, drawHUD, drawTitle, drawOverlay } from './render.js';
+// Solmar City entry point: the loop, the screens, saving, and the
+// staged screenshot scenes. The world does the simulating; this file
+// only wires input, sound, the camera and the canvas to it.
+import { createWorld } from './world.js';
+import { drawScene, drawHud, drawTitle, drawPause, drawBusted, drawComplete } from './render.js';
 import { createInput } from './input.js';
-import { createAudio } from './audio.js';
-import { stageShot } from './shots.js';
+import { sound } from './audio.js';
+import { stageShot, warmUpSeconds } from './shots.js';
 
-const SAVE_KEY = 'solmar-city-save-v1';
-const params = new URLSearchParams(location.search);
-const seed = params.get('seed') || '7';
-const shotName = params.get('shot');
-
+const SAVE_KEY = 'solmar-save-v1';
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const statusEl = document.getElementById('status');
 
-window.__errors = [];
-window.addEventListener('error', (e) => window.__errors.push(String(e.message || e.error)));
-window.addEventListener('unhandledrejection', (e) => window.__errors.push(String(e.reason)));
+const params = new URLSearchParams(window.location.search);
+const shotKind = params.get('shot');
+const seed = Number(params.get('seed') || '7') || 7;
 
 const world = createWorld(seed);
 const input = createInput(canvas);
-const audio = createAudio();
+const cam = { x: world.player.x, y: world.player.y };
 
-let screen = 'title'; // title | playing | paused
-let vw = 1280, vh = 720;
-let camX = 0, camY = 0;
-let shotWarmup = -1;
-let saveInfo = readSave();
+let screen = 'title';
+let shotReady = false;
+let sirenTimer = 0;
+let lastTime = performance.now();
 
-function readSave() {
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
+const debug = {
+  world,
+  get screen() {
+    return screen;
+  },
+  set screen(s) {
+    screen = s;
+  },
+};
+window.__solmar = debug;
 
 function saveGame() {
-  const p = world.player;
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
-      money: Math.round(p.money), missionIndex: world.mission.index,
-      missionStep: world.mission.step, hp: Math.round(p.hp), x: p.x, y: p.y,
-    }));
-    saveInfo = readSave();
-  } catch { /* storage unavailable — game still runs */ }
-}
-
-function loadSave() {
-  const s = readSave();
-  return !!s;
-}
-
-function startGame(fresh) {
-  if (!fresh && readSave()) {
-    const s = readSave();
     const p = world.player;
-    p.money = s.money; p.hp = s.hp; p.x = s.x; p.y = s.y;
-    p.onFoot = true; p.car = null; p.busted = false;
-    world.mission.index = s.missionIndex;
-    world.mission.step = s.missionStep;
-    world.mission.storyComplete = false;
-    // Rebuild step state (pickups, courier, wanted) for the loaded step.
-    setMission(world, s.missionIndex, s.missionStep);
-    p.money = s.money; p.hp = s.hp; p.x = s.x; p.y = s.y;
-    p.onFoot = true; p.car = null;
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      money: p.money, hp: p.hp, missionIndex: world.missionIndex,
+      missionStep: world.missionStep, x: p.x, y: p.y,
+    }));
+  } catch {
+    // Saving is best effort; the game plays on without it.
   }
-  audio.ensure();
-  audio.click();
-  screen = 'playing';
 }
 
-function resize() {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  vw = window.innerWidth; vh = window.innerHeight;
-  canvas.width = Math.round(vw * dpr);
-  canvas.height = Math.round(vh * dpr);
-  canvas.style.width = vw + 'px';
-  canvas.style.height = vh + 'px';
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    const p = world.player;
+    p.money = s.money;
+    p.hp = s.hp;
+    p.x = s.x;
+    p.y = s.y;
+    world.missionIndex = s.missionIndex;
+    world.missionStep = s.missionStep;
+    world.wanted = 0;
+    if (world.missionIndex === 1 && !world.pickups.some((pk) => pk.kind === 'crate' && !pk.taken)) {
+      world.spawnPickup('crate', 420, 2600);
+    }
+    if (world.missionIndex === 2 && !world.courier) world.spawnCourier();
+    if (world.missionIndex === 4 && !world.pickups.some((pk) => pk.kind === 'cash' && !pk.taken)) {
+      world.spawnPickup('cash', 2015, 1330);
+    }
+    world.say('Welcome back, Leo.', 4);
+    return true;
+  } catch {
+    return false;
+  }
 }
-window.addEventListener('resize', resize);
-resize();
 
-// Staged screenshot mode: real simulation, fixed warm-up, then ready.
-if (shotName) {
-  const staged = stageShot(world, shotName);
-  screen = staged.screen;
-  shotWarmup = staged.warmup;
-  if (screen === 'playing') audio.ensure();
-}
-
-function handleEvents() {
-  for (const ev of world.events) {
-    if (ev.type === 'shoot') audio.shoot();
-    else if (ev.type === 'crash' || ev.type === 'ram') audio.crash();
-    else if (ev.type === 'pickup') audio.pickup();
-    else if (ev.type === 'mission') { audio.jingle(); saveGame(); }
-    else if (ev.type === 'story') { audio.jingle(); saveGame(); }
-    else if (ev.type === 'busted') audio.busted();
-    else if (ev.type === 'punch') audio.punch();
-    else if (ev.type === 'steal') audio.click();
+function drainEvents() {
+  for (const e of world.events) {
+    if (e === 'shot') sound.shot();
+    else if (e === 'crash') sound.crash();
+    else if (e === 'pickup') sound.pickup();
+    else if (e === 'jingle') sound.jingle();
+    else if (e === 'busted') sound.busted();
+    else if (e === 'punch') sound.punch();
+    else if (e === 'stall') sound.crash();
   }
   world.events.length = 0;
 }
 
-function frame(now) {
-  requestAnimationFrame(frame);
-  const dt = 1 / 60;
-  // Edge-triggered keys.
-  if (input.wasPressed('Enter')) {
-    if (screen === 'title') startGame(true);
-    else if (screen === 'playing' && world.mission.storyComplete) { /* keep roaming */ }
-  }
-  if (input.wasPressed('KeyC') && screen === 'title' && readSave()) startGame(false);
-  if ((input.wasPressed('KeyP') || input.wasPressed('Escape')) && screen !== 'title') {
-    if (screen === 'playing') { screen = 'paused'; saveGame(); }
-    else if (screen === 'paused') screen = 'playing';
-  }
-  if (input.wasPressed('KeyM')) audio.toggleMute();
-  if (screen === 'playing') {
-    if (input.wasPressed('KeyE')) tryEnterCar(world);
-    const aimWX = camX + input.aimSX, aimWY = camY + input.aimSY;
-    const punchPressed = input.wasPressed('KeyF');
-    stepWorld(world, {
-      up: input.up, down: input.down, left: input.left, right: input.right,
-      run: input.run, shoot: input.shoot, punchPressed,
-      aimX: aimWX, aimY: aimWY,
-    }, dt);
-    handleEvents();
-    const p = world.player;
-    audio.setEngine(p.car ? Math.abs(p.car.speed) / 560 : 0, !!p.car);
-    audio.setSiren(p.wanted > 0 && !p.busted);
-    statusEl.textContent = `Health ${Math.round(p.hp)}, $${Math.round(p.money)}, wanted ${p.wanted} star${p.wanted === 1 ? '' : 's'}, ${world.mission.storyComplete ? 'story complete' : `mission ${world.mission.index + 1} of 5: ${currentMission(world).name}`}.`;
-  } else if (screen === 'title') {
-    // Living city behind the title: step the world with no player input.
-    stepWorld(world, { up: false, down: false, left: false, right: false, run: false, shoot: false, punchPressed: false }, dt);
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+if (shotKind) {
+  const staged = stageShot(world, shotKind);
+  screen = staged.screen;
+  const steps = Math.round(warmUpSeconds(shotKind) * 30);
+  for (let i = 0; i < steps; i++) {
+    world.update(1 / 30, {});
     world.events.length = 0;
   }
-  input.endFrame();
-
-  // Camera follows the player, clamped to the world.
-  const p = world.player;
-  camX = Math.max(0, Math.min(3200 - vw, p.x - vw / 2));
-  camY = Math.max(0, Math.min(3200 - vh, p.y - vh / 2));
-
-  ctx.clearRect(0, 0, vw, vh);
-  drawWorld(ctx, world, { camX, camY, vw, vh });
-  if (screen === 'playing' || screen === 'paused') {
-    drawHUD(ctx, world, vw, vh);
-    if (world.mission.storyComplete) {
-      drawOverlay(ctx, vw, vh, 'STORY COMPLETE', ['Leo Marín is free. The $40,000 debt is paid.', 'Press ENTER to keep roaming Solmar City.']);
-    } else if (p.busted) {
-      drawOverlay(ctx, vw, vh, 'BUSTED', [`Fined $200. You wake up at Solmar General Hospital…`, `Money: $${Math.round(p.money)}`], '#ff5a4d');
-    } else if (screen === 'paused') {
-      drawOverlay(ctx, vw, vh, 'PAUSED', ['Progress saved.', 'Press P to resume.']);
-    }
-  } else if (screen === 'title') {
-    drawTitle(ctx, world, vw, vh, saveInfo);
-  }
-
-  if (shotWarmup > 0) {
-    shotWarmup--;
-    if (shotWarmup === 0) window.__shotReady = true;
-  }
+  cam.x = world.player.x;
+  cam.y = world.player.y;
 }
 
-window.__solmar = { world, get screen() { return screen; }, saveGame, loadSave };
-window.__shotReady = false;
+function frame(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+  const vw = canvas.width;
+  const vh = canvas.height;
+
+  if (input.wasPressed('Enter')) {
+    sound.unlock();
+    if (screen === 'title' || screen === 'complete') {
+      screen = 'playing';
+      sound.startBass();
+    }
+  }
+  if (input.wasPressed('KeyC') && screen === 'title') {
+    if (loadGame()) {
+      screen = 'playing';
+      sound.unlock();
+      sound.startBass();
+    }
+  }
+  if ((input.wasPressed('KeyP') || input.wasPressed('Escape')) && (screen === 'playing' || screen === 'paused')) {
+    if (screen === 'playing') {
+      screen = 'paused';
+      saveGame();
+    } else {
+      screen = 'playing';
+    }
+  }
+  if (input.wasPressed('KeyM')) sound.toggleMute();
+
+  if (screen === 'playing' || screen === 'title' || screen === 'complete') {
+    const wi = screen === 'playing' ? input.toWorldInput(cam, vw, vh) : {};
+    world.update(dt, wi);
+    drainEvents();
+    if (world.justSaved) {
+      world.justSaved = false;
+      saveGame();
+    }
+    if (world.busted && screen === 'playing') screen = 'busted';
+    if (!world.busted && screen === 'busted') screen = 'playing';
+    if (world.storyComplete && screen === 'playing') screen = 'complete';
+  } else if (screen === 'busted') {
+    world.update(dt, {});
+    drainEvents();
+    if (!world.busted) screen = 'playing';
+  }
+
+  const p = world.player;
+  const tx = p.x;
+  const ty = p.y;
+  cam.x += (tx - cam.x) * Math.min(1, dt * 5);
+  cam.y += (ty - cam.y) * Math.min(1, dt * 5);
+
+  // Sound: engine hum while driving, siren while wanted.
+  sound.setEngine(screen === 'playing' && p.inCar && p.car, p.car ? p.car.speed : 0);
+  if (world.wanted > 0 && screen === 'playing') {
+    sirenTimer -= dt;
+    if (sirenTimer <= 0) {
+      sirenTimer = 1.4;
+      sound.sirenBlip();
+    }
+  }
+
+  ctx.clearRect(0, 0, vw, vh);
+  drawScene(ctx, world, cam, vw, vh);
+  if (screen === 'playing' || screen === 'paused' || screen === 'busted' || screen === 'complete') {
+    drawHud(ctx, world, vw, vh, screen === 'playing' ? { x: input.mouseX, y: input.mouseY } : null);
+  }
+  if (screen === 'title') drawTitle(ctx, world, vw, vh);
+  if (screen === 'paused') drawPause(ctx, vw, vh);
+  if (screen === 'busted') drawBusted(ctx, vw, vh);
+  if (screen === 'complete') drawComplete(ctx, world, vw, vh);
+
+  input.endFrame();
+  if (shotKind && !shotReady) {
+    shotReady = true;
+    window.__shotReady = true;
+  }
+  requestAnimationFrame(frame);
+}
 requestAnimationFrame(frame);

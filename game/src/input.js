@@ -1,53 +1,75 @@
-// Keyboard + mouse input for Solmar City. Tracks held keys and the mouse
-// position; edge-triggered actions are consumed once per frame by main.js.
+// Keyboard and mouse state for Solmar City. The game loop reads this
+// once a frame and turns it into the plain input object the world takes.
 export function createInput(canvas) {
   const state = {
-    up: false, down: false, left: false, right: false, run: false,
-    shoot: false, aimSX: 0, aimSY: 0,
+    keys: new Set(),
+    mouseX: 0,
+    mouseY: 0,
+    mouseDown: false,
+    clicked: false,
     pressed: new Set(),
   };
-  const keyMap = {
-    KeyW: 'up', ArrowUp: 'up',
-    KeyS: 'down', ArrowDown: 'down',
-    KeyA: 'left', ArrowLeft: 'left',
-    KeyD: 'right', ArrowRight: 'right',
-    ShiftLeft: 'run', ShiftRight: 'run',
-  };
-  function onKeyDown(e) {
-    if (keyMap[e.code] !== undefined) {
-      state[keyMap[e.code]] = true;
+  function codeOf(e) {
+    return e.code || e.key;
+  }
+  window.addEventListener('keydown', (e) => {
+    const c = codeOf(e);
+    if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(c)) {
       e.preventDefault();
     }
-    if (!e.repeat) state.pressed.add(e.code);
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) e.preventDefault();
-  }
-  function onKeyUp(e) {
-    if (keyMap[e.code] !== undefined) state[keyMap[e.code]] = false;
-  }
-  function onMouseMove(e) {
+    if (!e.repeat) state.pressed.add(c);
+    state.keys.add(c);
+  });
+  window.addEventListener('keyup', (e) => {
+    state.keys.delete(codeOf(e));
+  });
+  window.addEventListener('blur', () => {
+    state.keys.clear();
+    state.mouseDown = false;
+  });
+  canvas.addEventListener('mousemove', (e) => {
     const r = canvas.getBoundingClientRect();
-    state.aimSX = e.clientX - r.left;
-    state.aimSY = e.clientY - r.top;
-  }
-  function onMouseDown(e) {
-    if (e.button === 0) { state.shoot = true; onMouseMove(e); }
-  }
-  function onMouseUp(e) {
-    if (e.button === 0) state.shoot = false;
-  }
-  window.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keyup', onKeyUp);
-  canvas.addEventListener('mousemove', onMouseMove);
-  canvas.addEventListener('mousedown', onMouseDown);
-  window.addEventListener('mouseup', onMouseUp);
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    state.mouseX = e.clientX - r.left;
+    state.mouseY = e.clientY - r.top;
+  });
+  canvas.addEventListener('mousedown', (e) => {
+    const r = canvas.getBoundingClientRect();
+    state.mouseX = e.clientX - r.left;
+    state.mouseY = e.clientY - r.top;
+    state.mouseDown = true;
+    state.clicked = true;
+  });
+  window.addEventListener('mouseup', () => {
+    state.mouseDown = false;
+  });
+  // Turn the raw state into the world's input shape. cam converts the
+  // mouse position from screen pixels to world coordinates.
+  state.toWorldInput = (cam, vw, vh) => {
+    const held = (a, b) => state.keys.has(a) || (b && state.keys.has(b));
+    return {
+      up: held('KeyW', 'ArrowUp'),
+      down: held('KeyS', 'ArrowDown'),
+      left: held('KeyA', 'ArrowLeft'),
+      right: held('KeyD', 'ArrowRight'),
+      run: state.keys.has('ShiftLeft') || state.keys.has('ShiftRight'),
+      interact: state.keys.has('KeyE'),
+      punch: state.keys.has('KeyF'),
+      shoot: state.mouseDown,
+      aimX: cam.x - vw / 2 + state.mouseX,
+      aimY: cam.y - vh / 2 + state.mouseY,
+    };
+  };
+  // True once for a key pressed since the last call.
   state.wasPressed = (code) => {
-    if (state.pressed.has(code)) { state.pressed.delete(code); return true; }
+    if (state.pressed.has(code)) {
+      state.pressed.delete(code);
+      return true;
+    }
     return false;
   };
   state.endFrame = () => {
-    // Keep Enter / action keys for one frame only; held-key state persists.
     state.pressed.clear();
+    state.clicked = false;
   };
   return state;
 }

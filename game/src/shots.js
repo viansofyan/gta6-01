@@ -1,49 +1,119 @@
-// Deterministic staged scenes for screenshots: ?shot=<name>&seed=N.
-// Each stages a real simulation state, then main.js warms it up live for a
-// fixed number of frames before setting window.__shotReady.
-import { landmark } from './config.js';
-import { setMission, tryEnterCar, startAutopilot, nearestRoadPoint } from './world.js';
+// Deterministic staged scenes for screenshots. Each one sets a real
+// simulation state from the seed, then the game warms it up live before
+// the ready flag goes up. No scene is a mock: the city, the traffic and
+// the police are all running.
+import { MISSIONS } from './config.js';
 
-// Returns { screen, warmup } — screen the game should show, warmup frames.
-export function stageShot(w, name) {
-  const p = w.player;
-  if (name === 'drive') {
-    // Mission 1, step 1: steal the parked car by the spawn, then drive the
-    // road north toward Mara's Garage from ~1300 px out.
-    setMission(w, 0, 0);
-    p.x = 1000; p.y = 940; p.angle = -Math.PI / 2;
-    tryEnterCar(w);
-    const car = p.car;
-    if (car) { car.x = 1000; car.y = 1900; car.angle = -Math.PI / 2; car.speed = 0; p.x = 1000; p.y = 1900; }
-    startAutopilot(w, landmark('garage').door);
-    return { screen: 'playing', warmup: 100 };
+export function warmUpSeconds(kind) {
+  if (kind === 'start') return 2;
+  if (kind === 'drive') return 1.0;
+  if (kind === 'chase') return 3;
+  return 1.2;
+}
+
+function putPlayerInCar(world, x, y, angle) {
+  const p = world.player;
+  let car = null;
+  let best = Infinity;
+  for (const c of world.cars) {
+    if (c.kind !== 'parked') continue;
+    const d = Math.hypot(c.x - x, c.y - y);
+    if (d < best) {
+      best = d;
+      car = c;
+    }
   }
-  if (name === 'chase') {
-    // Mission 4 "Heat Wave": 3 stars, police chasing, autopilot driving the
-    // road toward the safehouse from ~1300 px out.
-    setMission(w, 0, 0);
-    p.x = 1000; p.y = 940; p.angle = -Math.PI / 2;
-    tryEnterCar(w);
-    setMission(w, 3, 0); // escape step sets wanted 3 + spawns police
-    const car = p.car;
-    if (car) { car.x = 2200; car.y = 1000; car.angle = Math.PI / 2; car.speed = 0; p.x = 2200; p.y = 1000; }
-    // Police spawn near the player; stage them in a spread on the same road
-    // behind the player so the chase is visible in frame.
-    const behind = [250, 310, 370];
-    w.police.forEach((cop, i) => {
-      const pt = nearestRoadPoint(2200, 1000 - behind[i % behind.length]);
-      cop.x = pt.x; cop.y = pt.y; cop.speed = 420;
-    });
-    startAutopilot(w, landmark('safehouse').door);
-    return { screen: 'playing', warmup: 140 };
+  if (!car) return null;
+  car.x = x;
+  car.y = y;
+  car.angle = angle;
+  car.speed = 0;
+  car.maxSpeed = 470;
+  p.inCar = true;
+  p.car = car;
+  car.isPlayer = true;
+  p.x = x;
+  p.y = y;
+  p.angle = angle;
+  return car;
+}
+
+function lineUpPoliceBehind(world, count, gap0) {
+  const p = world.player;
+  world.syncPolice();
+  const cops = world.cars.filter((c) => c.kind === 'police');
+  const behind = -Math.cos(p.angle);
+  const side = -Math.sin(p.angle);
+  cops.slice(0, count).forEach((cop, i) => {
+    const back = gap0 + i * 60;
+    cop.x = p.x + behind * back;
+    cop.y = p.y + side * back;
+    cop.angle = p.angle;
+    cop.speed = 260;
+    cop.stalled = false;
+  });
+  return cops.slice(0, count);
+}
+
+export function stageShot(world, kind) {
+  if (kind === 'start') {
+    // Title over the living city; the camera sits mid-city so the frame
+    // is all streets and blocks, no out-of-world edge.
+    world.player.x = 760;
+    world.player.y = 760;
+    return { screen: 'title' };
   }
-  if (name === 'mission') {
-    // Mission 2, step 0: on foot at the docks, crate marker ahead.
-    setMission(w, 1, 0);
-    p.x = 3000; p.y = 580; p.angle = -Math.PI / 2; p.aimAngle = -Math.PI / 2;
-    return { screen: 'playing', warmup: 60 };
+  if (kind === 'drive') {
+    putPlayerInCar(world, 1400, 600, Math.PI);
+    world.missionIndex = 0;
+    world.missionStep = 1;
+    world.wanted = 1;
+    world.quietTime = 0;
+    world.syncPolice();
+    const cops = world.cars.filter((c) => c.kind === 'police');
+    if (cops[0]) {
+      cops[0].x = world.player.x + 260;
+      cops[0].y = 600;
+      cops[0].angle = Math.PI;
+      cops[0].speed = 240;
+    }
+    world.driveTo(405, 520);
+    world.say('Drive it to Mara\u2019s Garage.', 6);
+    return { screen: 'playing' };
   }
-  // 'start' (and anything else): title screen over the living city.
-  setMission(w, 0, 0);
-  return { screen: 'title', warmup: 60 };
+  if (kind === 'chase') {
+    putPlayerInCar(world, 1400, 600, 0);
+    world.missionIndex = 3;
+    world.missionStep = 0;
+    world.wanted = 3;
+    world.quietTime = 0;
+    world.syncPolice();
+    lineUpPoliceBehind(world, 3, 250);
+    world.driveTo(2795, 2100);
+    world.say('Three stars. Lose the heat, then reach the safehouse.', 6);
+    return { screen: 'playing' };
+  }
+  if (kind === 'mission') {
+    world.missionIndex = 1;
+    world.missionStep = 0;
+    world.enterMission(1);
+    const p = world.player;
+    p.inCar = false;
+    p.car = null;
+    p.x = 430;
+    p.y = 2500;
+    p.angle = Math.PI / 2;
+    p.hp = 100;
+    world.wanted = 0;
+    world.say('Collect the crate at the docks.', 6);
+    return { screen: 'playing' };
+  }
+  return { screen: 'title' };
+}
+
+export function shotTitle(kind) {
+  if (kind === 'drive') return MISSIONS[0].name;
+  if (kind === 'chase') return MISSIONS[3].name;
+  if (kind === 'mission') return MISSIONS[1].name;
+  return 'Solmar City';
 }
