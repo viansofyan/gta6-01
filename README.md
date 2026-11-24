@@ -1,8 +1,8 @@
 # Solmar City
 
-[![Make GTA 6](https://make.fun/badge/gta6-01.svg)](https://make.fun/c/gta6-01)
-[![Rank](https://make.fun/badge/viansofyan/gta6-01/rank.svg)](https://make.fun/c/gta6-01/leaderboard)
-[![Reward](https://make.fun/badge/viansofyan/gta6-01/reward.svg)](https://make.fun/c/gta6-01)
+[![make.fun · gta6-01](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
+[![rank](https://make.fun/badge/gta6-01/viansofyan/gta6-01/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard)
+[![reward](https://make.fun/badge/gta6-01/viansofyan/gta6-01/reward.svg)](https://make.fun/bounty/gta6-01)
 
 An original open-world crime game in the spirit of GTA 6, built for the
 [Make GTA 6 bounty](https://make.fun/c/gta6-01) on make.fun. You are Leo
@@ -86,7 +86,7 @@ game/
     audio.js       synthesised WebAudio sound
     shots.js       deterministic staged scenes for screenshots
     main.js        game loop, screens, saving, debug handle
-screenshots/      four renders of the game (seed 7)
+screenshots/       four renders of the game (seed 7)
 ```
 
 ## License
