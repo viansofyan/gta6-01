@@ -86,7 +86,7 @@ game/
     audio.js       synthesised WebAudio sound
     shots.js       deterministic staged scenes for screenshots
     main.js        game loop, screens, saving, debug handle
-screenshots/       four renders of the game (seed 7)
+screenshots/      four renders of the game (seed 7)
 ```
 
 ## License
