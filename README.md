@@ -1,97 +1,94 @@
 # Solmar City
 
-[![make.fun](https://make.fun/badge/gta6-01.svg)](https://make.fun/bounty/gta6-01)
-[![rank](https://make.fun/badge/gta6-01/viansofyan/gta6-01/rank.svg)](https://make.fun/bounty/gta6-01)
-[![reward](https://make.fun/badge/gta6-01/viansofyan/gta6-01/reward.svg)](https://make.fun/bounty/gta6-01)
+[![Make GTA 6](https://make.fun/badge/gta6-01.svg)](https://make.fun/c/gta6-01)
+[![Rank](https://make.fun/badge/viansofyan/gta6-01/rank.svg)](https://make.fun/c/gta6-01/leaderboard)
+[![Reward](https://make.fun/badge/viansofyan/gta6-01/reward.svg)](https://make.fun/c/gta6-01)
 
 An original open-world crime game in the spirit of GTA 6, built for the
-[make.fun gta6-01 bounty](https://make.fun/bounty/gta6-01). You are Leo Marín,
-a driver who owes The Broker $40,000. Take the city back, job by job, across
-five story missions — stealing cars, losing the heat, and pulling the last
-score — in a sun-soaked city you can cross on foot and by car.
+[Make GTA 6 bounty](https://make.fun/c/gta6-01) on make.fun. You are Leo
+Marín, a driver in the sun-soaked city of Solmar who owes The Broker
+$40,000. Steal cars, outrun the police, and work five story missions to
+pay the debt — or just cruise the city in free roam.
 
-Everything here is original: the city, the characters, the vehicles, the
-names, the story, the art and the synthesised sound. Nothing from Rockstar
-Games or any other commercial game.
+Everything is original: the city, the characters, the vehicles, the names,
+the story, the art and the synthesised sound. Nothing from Rockstar Games.
 
-## What is in the game
+## Play
 
-- A 3200 by 3200 city on a 7 by 7 road grid: 48+ buildings, eight named
-  landmarks (Mara's Garage, Puerto Viejo Docks, Neon Palms Hotel, Solmar
-  National Bank, the Safehouse on Calle Luna, Solmar General Hospital,
-  Mercado Central, The Broker's Tower), a central park with a pond, and
-  Playa Solmar beach and water on the east edge.
-- Driving and walking with arcade car physics, a following camera, 13
-  traffic cars and 26 pedestrians who flee from gunfire and the police.
-- Car stealing (E), a five-star wanted system with police interceptors
-  that chase, ram and lose you, and a BUSTED flow with a $200 fine and a
-  hospital respawn.
-- Five story missions with intro text, an objective panel, a pulsing
-  diamond marker with a light beam, and a screen-edge arrow with the
-  distance to the target. Completing the last one pays the $40,000 debt.
-- Combat: a pistol aimed with the mouse, punching with F, stalled police
-  cars and courier vans, and cars that push each other apart on impact.
-- A HUD with a health bar, money, wanted stars, a mission panel, a
-  message banner and a live 200 by 200 minimap.
-- Title, pause, busted and story-complete screens, automatic saving after
-  every mission, and a save you can continue with C.
-- Synthesised WebAudio sound only: engine hum, a two-tone siren, gunshots,
-  crashes, pickup chimes, mission jingles, a busted sting and a bassline
-  loop. M toggles mute.
-
-## How to run it
-
-Play it locally with the dev server (Node 22, standard library only):
+The game runs offline in a desktop browser from static files, keyboard and
+mouse, no network request at runtime.
 
 ```sh
 node serve.ts
+# open http://localhost:8080/game/index.html
 ```
 
-Then open http://localhost:8080/game/index.html in desktop Chrome.
-
-Hand the entry in with the hand-in program:
+Or open `game/index.html` directly from the files. The hand-in program
+writes the entry dossier:
 
 ```sh
-MAKEFUN_OUTPUT_DIR=out node main.ts
+mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 ```
-
-That copies `game/` and `screenshots/` into the output directory and
-writes `dossier.json` there.
 
 ## Controls
 
 | Key | Action |
 | --- | --- |
-| WASD / arrows | Walk, or drive when in a car |
+| W / A / S / D | Walk, drive, steer |
 | Shift | Run on foot |
-| E | Steal a nearby car / get out of a car |
-| Mouse click | Fire the pistol at the mouse |
+| E | Steal / enter a car, exit a car |
+| Mouse + click | Aim and fire the pistol |
 | F | Punch |
 | P or Esc | Pause (auto-saves) |
 | C | Continue a saved game from the title screen |
-| M | Mute / unmute |
-| Enter | Start |
+| M | Mute |
 
 ## Missions
 
 1. **Borrowed Wheels** — steal a car and drive it to Mara's Garage. Pays $150.
-2. **The Pickup** — collect a crate at the docks and deliver it to the Neon Palms Hotel. Pays $400.
-3. **Tail Job** — stall the courier's van, take the briefcase, deliver it to The Broker's Tower. Pays $800.
-4. **Heat Wave** — lose a three-star wanted level, then reach the safehouse. Pays $600.
-5. **The Last Score** — rob the bank, then escape with four stars to the safehouse. Pays $40,000.
+2. **The Pickup** — collect a crate at Puerto Viejo Docks, deliver it to the
+   Neon Palms Hotel. Pays $400.
+3. **Tail Job** — stop the courier's van, take the briefcase, deliver it to
+   The Broker's Tower. Pays $800.
+4. **Heat Wave** — lose a 3-star wanted level, then reach the safehouse on
+   Calle Luna. Pays $600.
+5. **The Last Score** — rob Solmar National Bank, escape with 4 stars to the
+   safehouse. Pays $40,000 and clears the debt.
+
+Crimes raise your wanted level (up to 5 stars); each star decays after 26
+quiet seconds. One police cruiser spawns per star and chases you. Get
+busted and you pay a $200 fine and wake up at Solmar General Hospital.
+Progress auto-saves after every mission.
+
+## The city
+
+A 3200×3200 city on a 7×7 road grid: 56 buildings including eight named
+landmarks (Mara's Garage, Puerto Viejo Docks, Neon Palms Hotel, Solmar
+National Bank, the Safehouse on Calle Luna, Solmar General Hospital,
+Mercado Central, The Broker's Tower), a central park with a pond, and Playa
+Solmar beach and water along the east edge. Thirteen traffic cars cruise
+the roads and twenty-six pedestrians walk the sidewalks.
 
 ## File layout
 
-- `main.ts` — the hand-in program.
-- `serve.ts` — the static dev server.
-- `game/index.html` — the only page; loads the game as modules.
-- `game/src/config.js` — tuning numbers, the city layout, the mission script.
-- `game/src/random.js` — the seeded random-number generator.
-- `game/src/world.js` — the whole simulation (player, cars, traffic, pedestrians, police, missions, wanted level, combat).
-- `game/src/render.js` — all canvas drawing: the city, the HUD, the minimap.
-- `game/src/input.js` — keyboard and mouse state.
-- `game/src/audio.js` — synthesised WebAudio sound.
-- `game/src/shots.js` — the deterministic staged scenes for screenshots.
-- `game/src/main.js` — the game loop, the screens, saving and loading.
-- `screenshots/` — four renders of the game itself.
-- `vendor/makefun-game.ts` — the kit's dossier library, unchanged.
+```text
+main.ts            hand-in program (writes dossier.json)
+serve.ts           static dev server (port 8080)
+vendor/            make.fun kit library (untouched)
+game/
+  index.html       the only page
+  src/
+    config.js      tuning, city layout, mission script
+    random.js      seeded RNG
+    world.js       simulation: player, traffic, police, missions, combat
+    render.js      canvas drawing, HUD, minimap
+    input.js       keyboard and mouse state
+    audio.js       synthesised WebAudio sound
+    shots.js       deterministic staged scenes for screenshots
+    main.js        game loop, screens, saving, debug handle
+screenshots/      four renders of the game (seed 7)
+```
+
+## License
+
+MIT — see `LICENSE`.

@@ -1,19 +1,19 @@
-// Solmar City hand-in program (Node 22, standard library only).
-// Copies game/ and screenshots/ from beside this file into the output
-// directory and writes dossier.json there with the kit library's
-// dossier builder. MAKEFUN_OUTPUT_DIR overrides the default output
-// path; without it the output goes to /output.
+// Solmar City — hand-in program for make.fun competition gta6-01.
+// Copies game/ and screenshots/ from this repository into the output
+// directory and writes dossier.json with the kit library's builder.
+// Run: MAKEFUN_OUTPUT_DIR=out node main.ts
+// (Without the variable, the grader's /output is used.)
 import { cpSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const outDir = process.env.MAKEFUN_OUTPUT_DIR || '/output';
+const repoRoot = dirname(fileURLToPath(import.meta.url));
+const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
 mkdirSync(outDir, { recursive: true });
-cpSync(join(here, 'game'), join(outDir, 'game'), { recursive: true });
-cpSync(join(here, 'screenshots'), join(outDir, 'screenshots'), { recursive: true });
+cpSync(join(repoRoot, 'game'), join(outDir, 'game'), { recursive: true });
+cpSync(join(repoRoot, 'screenshots'), join(outDir, 'screenshots'), { recursive: true });
 
 const dossier = buildDossier(outDir, {
   text_max_bytes: 163840,
@@ -22,4 +22,4 @@ const dossier = buildDossier(outDir, {
   game_max_bytes: 50331648,
 });
 writeFileSync(join(outDir, 'dossier.json'), dossier);
-console.log('Wrote ' + join(outDir, 'dossier.json') + ' (' + dossier.length + ' bytes)');
+console.log(`Solmar City dossier written to ${join(outDir, 'dossier.json')} (${dossier.length} bytes)`);
